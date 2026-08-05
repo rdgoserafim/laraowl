@@ -19,6 +19,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // The application always runs behind the Caddy reverse proxy, which
+        // terminates TLS. Without this, Laravel sees requests as plain HTTP and
+        // generates http:// redirects (breaking the login flow behind HTTPS).
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'laraowl.token' => VerifyLaraowlToken::class,
         ]);
