@@ -19,6 +19,8 @@ services:
     volumes:
       - storage:/usr/share/caddy/html/storage:rw
       - public:/usr/share/caddy/html/public:rw
+      # Assets built locally and uploaded with docker/build-prod-light.sh
+      - ./public/build:/usr/share/caddy/html/public/build:ro
     healthcheck:
       test: ["CMD-SHELL", "php artisan --version >/dev/null 2>&1"]
       interval: 30s
@@ -36,15 +38,17 @@ services:
           cpus: "1"
           memory: 512M
 
-  horizon:
+  queue:
     image: laraowl:${APP_VERSION:-latest}
     restart: unless-stopped
-    command: php artisan horizon
+    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
     environment:
       IS_WORKER: "true"
     env_file:
       - .env
     depends_on:
+      app:
+        condition: service_healthy
       db:
         condition: service_healthy
       redis:
@@ -59,12 +63,13 @@ services:
         max-size: "10m"
         max-file: "3"
     deploy:
+      replicas: 2
       resources:
         limits:
-          cpus: "1"
-          memory: 512M
+          cpus: "0.5"
+          memory: 384M
 
-  schedule-worker:
+  scheduler:
     image: laraowl:${APP_VERSION:-latest}
     restart: unless-stopped
     command: php artisan schedule:work
@@ -73,6 +78,8 @@ services:
     env_file:
       - .env
     depends_on:
+      app:
+        condition: service_healthy
       db:
         condition: service_healthy
       redis:
@@ -101,12 +108,12 @@ services:
     env_file:
       - .env
     depends_on:
+      app:
+        condition: service_healthy
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-      horizon:
-        condition: service_started
     networks:
       - laraowl-network
     logging:
@@ -133,6 +140,7 @@ services:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile
       - storage:/usr/share/caddy/html/storage:rw
       - public:/usr/share/caddy/html/public:ro
+      - ./public/build:/usr/share/caddy/html/public/build:ro
       - caddy_data:/data
       - caddy_config:/config
     env_file:
