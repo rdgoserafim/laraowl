@@ -44,8 +44,10 @@ RUN composer install \
 
 # Copy package files for npm layer caching
 COPY package.json pnpm-lock.yaml* ./
-RUN npm install \
-  && npm run build \
+ENV NODE_OPTIONS=--max-old-space-size=1536
+ENV VITE_BUILD_CONCATENATE_MODULES=false
+RUN npm install --no-audit --no-fund --prefer-offline \
+  && NODE_OPTIONS=--max-old-space-size=1536 npm run build \
   && rm -rf node_modules \
   && npm cache clean --force
 

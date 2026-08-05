@@ -43,7 +43,8 @@ RUN composer install \
 
 # Copy package files for npm layer caching
 COPY package.json pnpm-lock.yaml* ./
-RUN npm install \
+ENV NODE_OPTIONS=--max-old-space-size=1536
+RUN npm install --no-audit --no-fund --prefer-offline \
   && npm cache clean --force
 
 # Prepare Laravel directories
