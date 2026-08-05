@@ -193,19 +193,15 @@ services:
           memory: 1G
 
   redis:
-    image: bitnami/redis:latest
-    platform: linux/amd64
+    image: redis:8-alpine
     restart: always
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes --rename-command FLUSHDB \"\" --rename-command FLUSHALL \"\""]
     volumes:
-      - redis-data:/bitnami/redis/data
-    environment:
-      - ALLOW_EMPTY_PASSWORD=no
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+      - redis-data:/data
     env_file:
       - .env
     healthcheck:
-      test: ["CMD-SHELL", "echo 'auth ${REDIS_PASSWORD}\nping' | redis-cli | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
