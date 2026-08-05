@@ -5,7 +5,9 @@
 
 # Docker
 Dockerfile
-docker/
+docker/*
+!docker/php-fpm-entrypoint
+!docker/php-fpm-entrypoint.dev
 docker-compose*.yaml
 .dockerignore
 
