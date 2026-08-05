@@ -64,13 +64,13 @@ RUN NODE_OPTIONS=--max-old-space-size=1536 npm run build \
 COPY . .
 
 # Set permissions and prepare Laravel
-RUN php artisan package:discover --ansi \
-  && mkdir -p storage/framework/cache/data \
+RUN mkdir -p storage/framework/cache/data \
   && mkdir -p storage/framework/sessions \
   && mkdir -p storage/framework/views \
   && mkdir -p storage/logs \
   && mkdir -p storage/app/public \
   && mkdir -p bootstrap/cache \
+  && php artisan package:discover --ansi \
   && chown -R www-data:www-data /usr/share/caddy/html/storage \
   && chown -R www-data:www-data /usr/share/caddy/html/bootstrap/cache \
   && chmod -R 775 /usr/share/caddy/html/storage \
