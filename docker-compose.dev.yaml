@@ -1,0 +1,178 @@
+name: laraowl-dev
+services:
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    image: laraowl:dev
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env.dev
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+    networks:
+      - laraowl-network
+    volumes:
+      - .:/usr/share/caddy/html
+      - /usr/share/caddy/html/vendor
+      - /usr/share/caddy/html/node_modules
+      - storage:/usr/share/caddy/html/storage
+      - bootstrap-cache:/usr/share/caddy/html/bootstrap/cache
+
+  vite:
+    image: laraowl:dev
+    restart: unless-stopped
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    env_file:
+      - .env.dev
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+    depends_on:
+      - app
+    networks:
+      - laraowl-network
+    volumes:
+      - .:/usr/share/caddy/html
+      - /usr/share/caddy/html/vendor
+      - /usr/share/caddy/html/node_modules
+    ports:
+      - "5173:5173"
+
+  web:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+      - vite
+    ports:
+      - "6080:6080"
+    volumes:
+      - ./docker/Caddyfile.dev:/etc/caddy/Caddyfile
+      - .:/usr/share/caddy/html
+      - storage:/usr/share/caddy/html/storage:rw
+    env_file:
+      - .env.dev
+    networks:
+      - laraowl-network
+
+  horizon:
+    image: laraowl:dev
+    restart: unless-stopped
+    command: php artisan horizon
+    environment:
+      IS_WORKER: "true"
+    env_file:
+      - .env.dev
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - laraowl-network
+    volumes:
+      - .:/usr/share/caddy/html
+      - /usr/share/caddy/html/vendor
+      - /usr/share/caddy/html/node_modules
+      - storage:/usr/share/caddy/html/storage
+
+  schedule-worker:
+    image: laraowl:dev
+    restart: unless-stopped
+    command: php artisan schedule:work
+    environment:
+      IS_WORKER: "true"
+    env_file:
+      - .env.dev
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - laraowl-network
+    volumes:
+      - .:/usr/share/caddy/html
+      - /usr/share/caddy/html/vendor
+      - /usr/share/caddy/html/node_modules
+      - storage:/usr/share/caddy/html/storage
+
+  reverb:
+    image: laraowl:dev
+    restart: unless-stopped
+    command: php artisan reverb:start
+    environment:
+      IS_WORKER: "true"
+    env_file:
+      - .env.dev
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      horizon:
+        condition: service_started
+    networks:
+      - laraowl-network
+    volumes:
+      - .:/usr/share/caddy/html
+      - /usr/share/caddy/html/vendor
+      - /usr/share/caddy/html/node_modules
+      - storage:/usr/share/caddy/html/storage
+
+  db:
+    image: postgres:17-alpine
+    restart: always
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${DB_DATABASE}
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    env_file:
+      - .env.dev
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - laraowl-network
+
+  redis:
+    image: bitnami/redis:latest
+    platform: linux/amd64
+    restart: always
+    volumes:
+      - redis-data:/bitnami/redis/data
+    environment:
+      - ALLOW_EMPTY_PASSWORD=no
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+    env_file:
+      - .env.dev
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'auth ${REDIS_PASSWORD}\nping' | redis-cli | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - laraowl-network
+
+volumes:
+  db-data:
+  redis-data:
+  storage:
+  bootstrap-cache:
+
+networks:
+  laraowl-network:
+    driver: bridge

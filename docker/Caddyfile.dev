@@ -1,0 +1,71 @@
+http://:6080 {
+	bind 0.0.0.0
+
+	root * /usr/share/caddy/html/public
+
+	header {
+		# Enable cross-site filter (XSS) and tell browser to block detected attacks
+		X-Xss-Protection "1; mode=block"
+
+		# disable clients from sniffing the media type
+		X-Content-Type-Options "nosniff"
+
+		# clickjacking protection
+		X-Frame-Options "SAMEORIGIN"
+
+		# hide server name
+		-Server Caddy
+	}
+
+	# Allow large file uploads
+	request_body {
+		max_size 100mb
+	}
+
+	# Proxy Vite dev server (HTTP + WebSocket HMR)
+	handle_path /@vite* {
+		reverse_proxy vite:5173
+	}
+
+	# Proxy Vite dev server asset requests
+	handle_path /@fs* {
+		reverse_proxy vite:5173
+	}
+
+	# Proxy Vite dev server hot update requests
+	handle_path /@id* {
+		reverse_proxy vite:5173
+	}
+
+	# Proxy Vite generated assets
+	handle_path /resources/* {
+		reverse_proxy vite:5173
+	}
+
+	# Proxy Vite node_modules requests
+	handle_path /node_modules/* {
+		reverse_proxy vite:5173
+	}
+
+	# Serve storage files directly
+	handle_path /storage/* {
+		root * /usr/share/caddy/html/storage/app/public
+		file_server
+		header Cache-Control "public, max-age=31536000"
+	}
+
+	# Proxy Reverb WebSocket connection
+	handle /app* {
+		reverse_proxy reverb:8080
+	}
+
+	# Handle PHP files with FastCGI
+	php_fastcgi app:9000
+	file_server
+
+	# Logging
+	log {
+		output stdout
+		format console
+	}
+}

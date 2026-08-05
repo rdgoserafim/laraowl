@@ -1,0 +1,52 @@
+#!/bin/bash
+
+main() {
+    # Allow workers to execute direct commands in the container (php artisan queue:work, etc.)
+    if [ "$IS_WORKER" = "true" ]; then
+        # su-exec drops root privileges and runs the command as www-data
+        exec su-exec www-data "$@"
+    else
+        prepare_storage
+        wait_for_db
+        run_migrations
+        run_server "$@"
+    fi
+}
+
+prepare_storage() {
+    echo "Preparing storage permissions..."
+
+    mkdir -p /usr/share/caddy/html/storage/framework/cache/data
+    mkdir -p /usr/share/caddy/html/storage/framework/sessions
+    mkdir -p /usr/share/caddy/html/storage/framework/views
+    mkdir -p /usr/share/caddy/html/storage/logs
+    mkdir -p /usr/share/caddy/html/storage/app/public
+    mkdir -p /usr/share/caddy/html/bootstrap/cache
+
+    chown -R www-data:www-data /usr/share/caddy/html/storage
+    chown -R www-data:www-data /usr/share/caddy/html/bootstrap/cache
+    chmod -R 775 /usr/share/caddy/html/storage
+    chmod -R 775 /usr/share/caddy/html/bootstrap/cache
+
+    if [ ! -L /usr/share/caddy/html/public/storage ]; then
+        su-exec www-data php artisan storage:link
+    fi
+}
+
+wait_for_db() {
+    echo "Waiting for DB to be ready"
+    until ./artisan migrate:status 2>&1 | grep -q -E "(Migration table not found|Migration name)"; do
+        sleep 1
+        echo "."
+    done
+}
+
+run_migrations() {
+    ./artisan migrate --force
+}
+
+run_server() {
+    exec /usr/local/bin/docker-php-entrypoint "$@"
+}
+
+main "$@"
