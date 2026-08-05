@@ -32,7 +32,9 @@ prepare_storage() {
     chmod -R 775 /usr/share/caddy/html/bootstrap/cache
 
     if [ ! -L /usr/share/caddy/html/public/storage ]; then
-        su-exec www-data php artisan storage:link
+        # Created as root: the public/ directory comes from a named volume owned
+        # by root, so www-data cannot create the symlink itself.
+        ln -sfn /usr/share/caddy/html/storage/app/public /usr/share/caddy/html/public/storage
     fi
 }
 
@@ -51,6 +53,11 @@ run_migrations() {
 optimize_app() {
     ./artisan optimize:clear || true
     ./artisan optimize
+
+    # The commands above run as root and may create log/cache files owned by
+    # root, which php-fpm (www-data) would not be able to write to afterwards.
+    chown -R www-data:www-data /usr/share/caddy/html/storage
+    chown -R www-data:www-data /usr/share/caddy/html/bootstrap/cache
 }
 
 run_server() {
