@@ -19,6 +19,22 @@ services:
     volumes:
       - storage:/usr/share/caddy/html/storage:rw
       - public:/usr/share/caddy/html/public:rw
+    healthcheck:
+      test: ["CMD-SHELL", "php artisan --version >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
 
   horizon:
     image: laraowl:${APP_VERSION:-latest}
@@ -37,7 +53,16 @@ services:
       - laraowl-network
     volumes:
       - storage:/usr/share/caddy/html/storage:rw
-      - public:/usr/share/caddy/html/public:rw
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
 
   schedule-worker:
     image: laraowl:${APP_VERSION:-latest}
@@ -56,7 +81,16 @@ services:
       - laraowl-network
     volumes:
       - storage:/usr/share/caddy/html/storage:rw
-      - public:/usr/share/caddy/html/public:rw
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   reverb:
     image: laraowl:${APP_VERSION:-latest}
@@ -75,13 +109,23 @@ services:
         condition: service_started
     networks:
       - laraowl-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
       app:
-        condition: service_started
+        condition: service_healthy
     ports:
       - 80:80
       - 443:443
@@ -94,12 +138,22 @@ services:
     env_file:
       - .env
     healthcheck:
-      test: ["CMD", "wget", "--no-check-certificate", "--quiet", "--spider", "https://localhost/"]
+      test: ["CMD-SHELL", "wget --no-check-certificate --quiet --spider https://${APP_HOSTNAME:-localhost}/ || wget --no-check-certificate --quiet --spider https://localhost/"]
       interval: 10s
       timeout: 5s
       retries: 3
     networks:
       - laraowl-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   db:
     image: postgres:17-alpine
@@ -119,6 +173,16 @@ services:
       retries: 5
     networks:
       - laraowl-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
 
 
   redis:
@@ -140,6 +204,16 @@ services:
       retries: 5
     networks:
       - laraowl-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
 volumes:
   db-data:

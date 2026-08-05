@@ -1,2 +1,61 @@
+# Git
+.git
+.gitattributes
+.gitignore
+
+# Docker
+Dockerfile
+docker/
+docker-compose*.yaml
+.dockerignore
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Dependencies
 **/node_modules
 **/vendor
+
+# Storage and caches (created at runtime by entrypoint)
+storage/framework/cache
+storage/framework/sessions
+storage/framework/views
+storage/logs
+storage/app/public
+bootstrap/cache
+
+# Build artifacts
+public/build
+public/hot
+public/storage
+
+# Logs
+*.log
+
+# Testing
+tests/
+phpunit.xml
+pint.json
+.eslintrc*
+eslint.config.js
+prettier.config.*
+
+# IDE and OS
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+!README.md
+art/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+

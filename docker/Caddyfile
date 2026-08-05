@@ -34,11 +34,22 @@
 
         # Proxy Reverb WebSocket connection
         handle /app* {
-                reverse_proxy reverb:8080
+                reverse_proxy reverb:8080 {
+                        transport http {
+                                keepalive off
+                        }
+                        header_up Host {host}
+                        header_up X-Real-IP {remote_host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                }
         }
 
         # Handle PHP files with FastCGI
-        php_fastcgi app:9000
+        php_fastcgi app:9000 {
+                read_timeout 300s
+                send_timeout 300s
+        }
         file_server
 
         # Logging
