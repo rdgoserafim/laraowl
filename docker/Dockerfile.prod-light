@@ -20,9 +20,7 @@ RUN apk --no-cache add \
     bash \
     postgresql-client \
     linux-headers \
-    libtool \
-    nodejs \
-    npm
+    libtool
 
 # Add extra PHP dependencies
 RUN docker-php-ext-install pdo pgsql pdo_pgsql gd bcmath zip exif pcntl \
@@ -42,25 +40,7 @@ RUN composer install \
   --optimize-autoloader \
   && composer clear-cache
 
-# Copy package files for npm layer caching
-COPY package.json pnpm-lock.yaml* ./
-ENV NODE_OPTIONS=--max-old-space-size=1536
-RUN npm install --no-audit --no-fund --prefer-offline \
-  && npm cache clean --force
-
-# Copy files needed for Vite build (keep layer cache when source changes)
-COPY artisan ./
-COPY bootstrap ./bootstrap
-COPY config ./config
-COPY public ./public
-COPY resources ./resources
-COPY routes ./routes
-COPY vite.config.ts tsconfig.json* ./
-RUN NODE_OPTIONS=--max-old-space-size=1536 npm run build \
-  && rm -rf node_modules \
-  && npm cache clean --force
-
-# Copy remaining application code
+# Copy application code (frontend assets must be pre-built in public/build)
 COPY . .
 
 # Set permissions and prepare Laravel
@@ -77,7 +57,6 @@ RUN php artisan package:discover --ansi \
   && chmod -R 775 /usr/share/caddy/html/bootstrap/cache
 
 COPY ./docker/php-fpm-entrypoint /usr/local/bin/php-entrypoint
-
 RUN chmod a+x /usr/local/bin/*
 
 FROM app

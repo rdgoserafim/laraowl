@@ -1,0 +1,227 @@
+name: laraowl
+services:
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.prod-light
+    image: laraowl:${APP_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - laraowl-network
+    volumes:
+      - storage:/usr/share/caddy/html/storage:rw
+      - public:/usr/share/caddy/html/public:rw
+    healthcheck:
+      test: ["CMD-SHELL", "php artisan --version >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  horizon:
+    image: laraowl:${APP_VERSION:-latest}
+    restart: unless-stopped
+    command: php artisan horizon
+    environment:
+      IS_WORKER: "true"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - laraowl-network
+    volumes:
+      - storage:/usr/share/caddy/html/storage:rw
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  schedule-worker:
+    image: laraowl:${APP_VERSION:-latest}
+    restart: unless-stopped
+    command: php artisan schedule:work
+    environment:
+      IS_WORKER: "true"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - laraowl-network
+    volumes:
+      - storage:/usr/share/caddy/html/storage:rw
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  reverb:
+    image: laraowl:${APP_VERSION:-latest}
+    restart: unless-stopped
+    command: php artisan reverb:start
+    environment:
+      IS_WORKER: "true"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      horizon:
+        condition: service_started
+    networks:
+      - laraowl-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile
+      - storage:/usr/share/caddy/html/storage:rw
+      - public:/usr/share/caddy/html/public:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate --quiet --spider https://${APP_HOSTNAME:-localhost}/ || wget --no-check-certificate --quiet --spider https://localhost/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - laraowl-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  db:
+    image: postgres:17-alpine
+    restart: always
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${DB_DATABASE}
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    env_file:
+      - .env
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - laraowl-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+
+  redis:
+    image: bitnami/redis:latest
+    platform: linux/amd64
+    restart: always
+    volumes:
+      - redis-data:/bitnami/redis/data
+    environment:
+      - ALLOW_EMPTY_PASSWORD=no
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'auth ${REDIS_PASSWORD}\nping' | redis-cli | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - laraowl-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+volumes:
+  db-data:
+  redis-data:
+  storage:
+  public:
+  caddy_data:
+  caddy_config:
+
+networks:
+  laraowl-network:
+    driver: bridge
