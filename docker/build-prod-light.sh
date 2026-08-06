@@ -26,8 +26,51 @@ else
     INSTALL_CMD=(npm install --no-audit --no-fund)
 fi
 
+if [ ! -f .env.production ]; then
+    echo ".env.production not found in $(pwd)." >&2
+    echo "The frontend bundle needs it to embed the VITE_* variables (Reverb websocket auth)." >&2
+    exit 1
+fi
+
 echo "Installing Node dependencies with ${PACKAGE_MANAGER}..."
 "${INSTALL_CMD[@]}"
+
+# Vite resolves env files in this order for `--mode production`:
+#   .env -> .env.local -> .env.production -> .env.production.local
+# Local overrides would silently win over .env.production and ship the wrong
+# websocket host/key to production, so refuse to build when they exist.
+for stale_env in .env.local .env.production.local; do
+    if [ -f "${stale_env}" ]; then
+        echo "${stale_env} exists and would override .env.production during the build." >&2
+        echo "Remove or rename it before building production assets." >&2
+        exit 1
+    fi
+done
+
+echo "Resolving VITE_* variables from .env.production..."
+node --input-type=module -e "
+import { loadEnv } from 'vite';
+
+const required = [
+    'VITE_APP_NAME',
+    'VITE_REVERB_APP_KEY',
+    'VITE_REVERB_HOST',
+    'VITE_REVERB_PORT',
+    'VITE_REVERB_SCHEME',
+];
+
+const env = loadEnv('production', process.cwd(), 'VITE_');
+const missing = required.filter((key) => !env[key]);
+
+for (const key of required) {
+    console.log(\`  \${key}=\${env[key] ?? '<missing>'}\`);
+}
+
+if (missing.length > 0) {
+    console.error(\`Missing or empty in .env.production: \${missing.join(', ')}\`);
+    process.exit(1);
+}
+"
 
 # The Vite build runs `php artisan wayfinder:generate`, which fails when
 # bootstrap/cache holds caches generated inside the Docker container
@@ -42,7 +85,7 @@ echo "Installing Node dependencies with ${PACKAGE_MANAGER}..."
 
 echo "Building production assets..."
 rm -rf public/build
-NODE_OPTIONS=--max-old-space-size=4096 "${PACKAGE_MANAGER}" run build
+NODE_OPTIONS=--max-old-space-size=4096 "${PACKAGE_MANAGER}" run build -- --mode production
 
 if [ ! -d public/build ]; then
     echo "Build failed: public/build was not generated." >&2

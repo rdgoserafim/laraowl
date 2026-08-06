@@ -1,4 +1,4 @@
-{$APP_HOSTNAME}, ws.{$APP_HOSTNAME} {
+{$APP_HOSTNAME} {
         root * /usr/share/caddy/html/public
 
         header {
